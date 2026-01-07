@@ -280,7 +280,6 @@
   "type": "Microsoft.Authorization/roleAssignments",
   "apiVersion": "2022-04-01",
   "name": "[guid(resourceGroup().id, 'MonitoringMetricsPublisher', resourceId('Microsoft.Logic/workflows', parameters('workflows_AdminByRequest_Integration_name')))]",
-  "scope": "[resourceGroup().id]",
   "properties": {
     "roleDefinitionId": "[concat(subscription().id, '/providers/Microsoft.Authorization/roleDefinitions/3913510d-42f4-4e42-8a64-420c390055eb')]",
     "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('workflows_AdminByRequest_Integration_name')), '2017-07-01', 'full').identity.principalId]",
