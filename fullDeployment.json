@@ -1,0 +1,294 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "String",
+      "defaultValue": "australiaeast"
+    },
+    "workspaceName": {
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Log Analytics workspace in this resource group."
+      }
+    },
+    "dataCollectionEndpoints_AdminByRequestDCE_name": {
+      "type": "String",
+      "defaultValue": "AdminByRequestDCE"
+    },
+    "dataCollectionRules_AdminByRequestDCR_name": {
+      "type": "String",
+      "defaultValue": "AdminByRequestDCR"
+    },
+    "workflows_AdminByRequest_Integration_name": {
+      "type": "String",
+      "defaultValue": "AdminByRequest-Integration"
+    }
+  },
+  "variables": {
+    "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+    "adminByRequestTableName": "AdminByRequest_CL",
+    "adminByRequestTableResourceName": "[concat(parameters('workspaceName'), '/', variables('adminByRequestTableName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[variables('adminByRequestTableResourceName')]",
+      "properties": {
+        "schema": {
+          "name": "[variables('adminByRequestTableName')]",
+          "columns": [
+            {
+              "name": "TimeGenerated",
+              "type": "dateTime"
+            },
+            {
+              "name": "data",
+              "type": "dynamic"
+            }
+          ],
+          "displayName": "AdminByRequest Events",
+          "description": "AdminByRequest webhook events ingested via Logs Ingestion API."
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionEndpoints",
+      "apiVersion": "2023-03-11",
+      "name": "[parameters('dataCollectionEndpoints_AdminByRequestDCE_name')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "configurationAccess": {},
+        "logsIngestion": {},
+        "metricsIngestion": {},
+        "networkAcls": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2023-03-11",
+      "name": "[parameters('dataCollectionRules_AdminByRequestDCR_name')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "dataCollectionEndpointId": "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpoints_AdminByRequestDCE_name'))]",
+        "streamDeclarations": {
+          "Custom-AdminByRequest_CL": {
+            "columns": [
+              {
+                "name": "TimeGenerated",
+                "type": "datetime"
+              },
+              {
+                "name": "data",
+                "type": "dynamic"
+              }
+            ]
+          }
+        },
+        "dataSources": {},
+        "destinations": {
+          "logAnalytics": [
+            {
+              "workspaceResourceId": "[variables('workspaceResourceId')]",
+              "name": "laDest"
+            }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [
+              "Custom-AdminByRequest_CL"
+            ],
+            "destinations": [
+              "laDest"
+            ],
+            "transformKql": "source",
+            "outputStream": "Custom-AdminByRequest_CL"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpoints_AdminByRequestDCE_name'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), variables('adminByRequestTableName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[parameters('workflows_AdminByRequest_Integration_name')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "state": "Enabled",
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "DCRImmutableID": { "type": "String" },
+            "DCRStreamName": { "type": "String" },
+            "DCELogsIngestionURL": { "type": "String" },
+            "$connections": { "defaultValue": {}, "type": "Object" }
+          },
+          "triggers": {
+            "When_an_HTTP_request_is_received": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": { "type": "integer" },
+                      "traceNo": { "type": "string" },
+                      "settingsName": { "type": "string" },
+                      "type": { "type": "string" },
+                      "typeCode": { "type": "integer" },
+                      "status": { "type": "string" },
+                      "statusCode": { "type": "integer" },
+                      "reason": { "type": "string" },
+                      "approvedBy": { "type": "string" },
+                      "deniedReason": {},
+                      "deniedBy": {},
+                      "ssoValidated": { "type": "boolean" },
+                      "requestTime": { "type": "string" },
+                      "requestTimeUTC": { "type": "string" },
+                      "startTime": { "type": "string" },
+                      "startTimeUTC": { "type": "string" },
+                      "endTime": { "type": "string" },
+                      "endTimeUTC": { "type": "string" },
+                      "responseTime": { "type": "string" },
+                      "auditlogLink": { "type": "string" },
+                      "user": {
+                        "type": "object",
+                        "properties": {
+                          "account": { "type": "string" },
+                          "fullName": { "type": "string" },
+                          "email": { "type": "string" },
+                          "phone": { "type": "string" },
+                          "isAdmin": { "type": "boolean" }
+                        }
+                      },
+                      "computer": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "platform": { "type": "string" },
+                          "platformCode": { "type": "integer" },
+                          "make": { "type": "string" },
+                          "model": { "type": "string" }
+                        }
+                      },
+                      "application": {
+                        "type": "object",
+                        "properties": {
+                          "file": { "type": "string" },
+                          "path": { "type": "string" },
+                          "name": { "type": "string" },
+                          "vendor": { "type": "string" },
+                          "version": { "type": "string" },
+                          "sha256": { "type": "string" },
+                          "scanResult": { "type": "string" },
+                          "scanResultCode": { "type": "integer" },
+                          "threat": {},
+                          "virustotalLink": { "type": "string" },
+                          "preapproved": { "type": "boolean" }
+                        }
+                      },
+                      "installs": { "type": "array" },
+                      "uninstalls": { "type": "array" },
+                      "elevatedApplications": { "type": "array" },
+                      "scanResults": { "type": "array" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Variables": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "DCELogsIngestionURL",
+                    "type": "string",
+                    "value": "@{parameters('DCELogsIngestionURL')}"
+                  },
+                  {
+                    "name": "DCRImmutableID",
+                    "type": "string",
+                    "value": "@{parameters('DCRImmutableID')}"
+                  },
+                  {
+                    "name": "DCRStreamName",
+                    "type": "string",
+                    "value": "@{parameters('DCRStreamName')}"
+                  }
+                ]
+              }
+            },
+            "HTTP": {
+              "runAfter": { "Initialize_Variables": [ "Succeeded" ] },
+              "type": "Http",
+              "inputs": {
+                "uri": "@{variables('DCELogsIngestionURL')}/dataCollectionRules/@{variables('DCRImmutableID')}/streams/@{variables('DCRStreamName')}?api-version=2023-01-01",
+                "method": "POST",
+                "headers": { "Content-Type": "application/json" },
+                "body": [
+                  {
+                    "TimeGenerated": "@{utcNow()}",
+                    "data": "@{triggerBody()}"
+                  }
+                ],
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://monitor.azure.com/"
+                }
+              },
+              "runtimeConfiguration": {
+                "contentTransfer": { "transferMode": "Chunked" }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "$connections": { "value": {} },
+          "DCRStreamName": { "value": "Custom-AdminByRequest_CL" },
+          "DCELogsIngestionURL": {
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpoints_AdminByRequestDCE_name')), '2023-03-11', 'full').properties.logsIngestion.endpoint]"
+          },
+          "DCRImmutableID": {
+            "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRules_AdminByRequestDCR_name')), '2023-03-11', 'full').properties.immutableId]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Insights/dataCollectionEndpoints', parameters('dataCollectionEndpoints_AdminByRequestDCE_name'))]",
+        "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRules_AdminByRequestDCR_name'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, 'MonitoringMetricsPublisher', reference(resourceId('Microsoft.Logic/workflows', parameters('workflows_AdminByRequest_Integration_name')), '2017-07-01', 'full').identity.principalId)]",
+      "scope": "[resourceGroup().id]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '3913510d-42f4-4e42-8a64-420c390055eb')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', parameters('workflows_AdminByRequest_Integration_name')), '2017-07-01', 'full').identity.principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', parameters('workflows_AdminByRequest_Integration_name'))]"
+      ]
+    }
+  ]
+}
